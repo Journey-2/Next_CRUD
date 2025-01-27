@@ -1,14 +1,16 @@
-import { count } from "console";
 
-export async function fetchPokemonList(limit: number = 20, offset: number = 0) {
+export async function fetchPokemonList(limit: number = 20, offset: number = 0, searchQuery: string = "") {
     const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);
     if (!response.ok) {
         throw new Error("Failed to fetch Pokemon List");
     }
     const data = await response.json();
 
+    const filteredResults = searchQuery ? data.results.filter((pokemon: {name: string}) => 
+        pokemon.name.toLowerCase().includes(searchQuery.toLowerCase())) : data.results;
+
     const detailedResults = await Promise.all(
-        data.results.map(async (pokemon: { name: string; url: string }) => {
+        filteredResults.map(async (pokemon: { name: string; url: string }) => {
             const detailsResponse = await fetch(pokemon.url);
             const details = await detailsResponse.json();
 
@@ -23,10 +25,11 @@ export async function fetchPokemonList(limit: number = 20, offset: number = 0) {
                 id: details.id,
                 sprite: details.sprites.front_default,
                 totalStats,
-                cry: details.cries.latest,
+                cry: details.cries.latest || details.cries.legacy,
                 types
             }
         })
-    )
-    return { results: detailedResults, count: data.count }
+    );
+    
+    return { results: detailedResults }
 }

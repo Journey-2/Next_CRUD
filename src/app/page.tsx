@@ -1,36 +1,62 @@
 'use client';
 
-import React from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPokemonList } from "../../utils/pokemonAPI";
-import { useRouter, useSearchParams } from "next/navigation";
+import { debounce } from "lodash";
+//import { useRouter, useSearchParams } from "next/navigation";
 
 const HomePage: React.FC = () => {
 
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+/*
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const currentPage = parseInt(searchParams.get("page") || "1");
   const limit = 20;
   const offset = (currentPage - 1) * limit;
+*/
 
+  const debouncedSearch = useMemo(
+    () => 
+      debounce((query: string) => {
+        setSearchQuery(query);
+        setOffset(0);
+    }, 500), []
+  );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchInput(e.target.value);
+    debouncedSearch(e.target.value);
+  }
+  const limit = 20;
   const { data, isLoading, error } = useQuery({ 
-    queryKey: ["pokeList", currentPage],
-    queryFn: () => fetchPokemonList(limit, offset),
+    queryKey: ["pokeList", offset, searchQuery],
+    queryFn: () => fetchPokemonList(limit, offset, searchQuery),
     refetchOnWindowFocus: false
   });
 
+  useEffect(() => {
+    return () => {
+      debouncedSearch.cancel(); 
+    };
+  }, [debouncedSearch]);
+
+/*
   const handlePageChange = (newPage: number) => { 
     router.push(`/?page=${newPage}`);
   }
-
+*/
   if (isLoading) return <p>Loading Pokemon...</p>
   if (error) return <p>Something went wrong.</p>
 
   return (
     <div>
       <h1>Pokemon List</h1>
-      <p></p>
+      <input type = "text" placeholder="Search Pokemon by name" value={searchQuery} onChange={handleSearchChange} />
       <ul>
         {data.results.map((pokemon: { name: string; id: number; sprite: string; totalStats: number, cry: string; types: string[] }, index: number) => (
           <li key={index}>
@@ -49,18 +75,15 @@ const HomePage: React.FC = () => {
       
       <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
         <button
-          onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
+          onClick={() => setOffset(prev => Math.max(prev - 20, 0))}
+          disabled={offset === 0}
           style={{ marginRight: "10px" }}
-        >
-          Previous
-        </button>
+        >Previous</button>
+        
         <button
-          onClick={() => handlePageChange(currentPage + 1)}
+          onClick={() => setOffset(prev => prev + 20)}
           disabled={data.results.length < limit} // Disable if no more Pokémon
-        >
-          Next
-        </button>
+        >Next</button>
       </div>
     </div>
   )
