@@ -1,3 +1,110 @@
+'use client';
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchPokemonList } from "../../utils/pokemonAPI";
+import { useRouter, useSearchParams } from "next/navigation";
+
+const HomePage: React.FC = () => {
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const currentPage = parseInt(searchParams.get("page") || "1");
+  const limit = 20;
+  const offset = (currentPage - 1) * limit;
+
+  const { data, isLoading, error } = useQuery({ 
+    queryKey: ["pokeList", currentPage],
+    queryFn: () => fetchPokemonList(limit, offset),
+    refetchOnWindowFocus: false
+  });
+
+  const handlePageChange = (newPage: number) => { 
+    router.push(`/?page=${newPage}`);
+  }
+
+  if (isLoading) return <p>Loading Pokemon...</p>
+  if (error) return <p>Something went wrong.</p>
+
+  return (
+    <div>
+      <h1>Pokemon List</h1>
+      <p></p>
+      <ul>
+        {data.results.map((pokemon: { name: string; id: number; sprite: string; totalStats: number, cry: string; types: string[] }, index: number) => (
+          <li key={index}>
+            <p>{pokemon.id}</p>
+            <img src={pokemon.sprite} alt={`${pokemon.name} sprite`} />
+            <p>{pokemon.name}</p>
+            <p>{pokemon.types.join(", ")}</p>
+            <p>{pokemon.totalStats}</p>
+            <audio controls>
+              <source src={pokemon.cry} type="audio/ogg" />
+              Browser does not support ogg file
+            </audio>
+          </li>
+        ))}  
+      </ul>
+      
+      <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          style={{ marginRight: "10px" }}
+        >
+          Previous
+        </button>
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={data.results.length < limit} // Disable if no more Pokémon
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default HomePage;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+export default function Page() {
+  return <h1>The first page (& the only one for me ig)</h1>
+}
+
 import Image from "next/image";
 import styles from "./page.module.css";
 
@@ -93,3 +200,4 @@ export default function Home() {
     </div>
   );
 }
+*/
