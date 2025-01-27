@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Drawer, Button } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
+import { log } from "console";
 
 async function fetchPokemonList(limit: number = 20, offset: number = 0) {//offset : to skip
   const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);//wait for the response before furthering
@@ -21,10 +22,13 @@ async function fetchPokemonList(limit: number = 20, offset: number = 0) {//offse
           const details = await detailsResponse.json();//this will contain additional information of each pokemon like stats, sprite, etc
 
           const totalStats = details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
-              (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
+              (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total
           )
 
-          const types = details.types.map((type: { slot: number; type: { name: string } })=> type.type.name);
+          //details.type holds the value of types in the form of array
+          const types = details.types.map((type: { slot: number; type: { name: string } })=> type.type.name);//
+          //sligtly unambigious 
+          //there is the type object(1st type) which has two properties, these being slot(1st type and 2nd type) and the type(2nd type) of the pokemon which thereby contains name:
 
           return {
               name: pokemon.name,
@@ -36,28 +40,29 @@ async function fetchPokemonList(limit: number = 20, offset: number = 0) {//offse
           }
       })
   )
-  return { results: detailedResults, count: data.count }
+  return { results: detailedResults}//after finishing promise.all, fetchlist return an object which contains an array of pokemon object which has the detailed information on name, stats, sprite 
 }
 
 const fetchPokemonDetails = async (id: number) => {
-  const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+  const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);//ensures that the function pauses execution until fetch operation is complete
   if (!res.ok) throw new Error("Failed to fetch Pokémon details");
   return res.json();
 };
 
-const HomePage: React.FC = () => {
-  const searchParams = useSearchParams();
-  const router = useRouter();
+const HomePage/*: React.FC*/ = () => {//find the use for defining it as a functional component
+  const searchParams = useSearchParams();//will use later to get the query string value
+  const router = useRouter();//this will be used to go back and forth between pages. For example using router.push('/1) will navigate to the /1 route
 
-  const currentPage = parseInt(searchParams.get("page") || "1");
-  const limit = 20;
-  const offset = (currentPage - 1) * limit;
 
-  const [selectedPokemon, setSelectedPokemon] = useState<any>(null); 
-  const [drawerVisible, setDrawerVisible] = useState(false); 
+  const currentPage = parseInt(searchParams.get("page") || "1");//will store the value of the current page, later used for going to the previous page and the next page 
+  const limit = 20;//amount of items
+  const offset = (currentPage - 1) * limit;//items to skip
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["pokeList", currentPage],
+  const [selectedPokemon, setSelectedPokemon] = useState<any>(null); // selecting the pokemon object for displaing in the drawer menu
+  const [drawerVisible, setDrawerVisible] = useState(false);// visibility of the drawer 
+
+  const { data, isLoading, error } = useQuery({//this will fetch the paginated list of the pokemon entries
+    queryKey: ["pokeList", currentPage],//defines the key 
     queryFn: () => fetchPokemonList(limit, offset),
     refetchOnWindowFocus: false,
   });
@@ -87,7 +92,7 @@ const HomePage: React.FC = () => {
 
   return (
     <div>
-      <h1>Pokémon List</h1>
+      <h1>Pokémon Page no : {searchParams.get("page")}</h1>
       <ul>
         {data?.results.map(
           (
