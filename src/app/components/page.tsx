@@ -14,13 +14,14 @@ async function fetchPokemonList(limit: number = 20, offset: number = 0) {//offse
   //.json() method returns a promise which is why we use await to pause the exexution and get the result of the promise
   const data = await response.json();// this contains a result array with pokemon name and url
 
-  const detailedResults = await Promise.all(//will
-      data.results.map(async (pokemon: { name: string; url: string }) => {
-          const detailsResponse = await fetch(pokemon.url);
-          const details = await detailsResponse.json();
+  const detailedResults = await Promise.all(//will wait for all the promises to resolve.
+    //returns a promise that resolves to an array of results of all promises
+      data.results.map(async (pokemon: { name: string; url: string }) => {//iterate over data.result array to fetch basic pokemon details like the name and the url
+          const detailsResponse = await fetch(pokemon.url);//for each pokemon you are fetching additional details from url as it contains the endpoints
+          const details = await detailsResponse.json();//this will contain additional information of each pokemon like stats, sprite, etc
 
-          const totalStats = details.stats.reduce(
-              (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0
+          const totalStats = details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
+              (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
           )
 
           const types = details.types.map((type: { slot: number; type: { name: string } })=> type.type.name);
