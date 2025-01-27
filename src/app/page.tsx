@@ -1,7 +1,7 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import Pokemon from './pokemons/page'; 
+import HomePage from './components/page'; 
 
 const queryClient = new QueryClient();
 
@@ -9,8 +9,8 @@ export default function Home() {
   return (
     <div>
       <QueryClientProvider client={queryClient}>
-        <Pokemon />
+        <HomePage />
       </QueryClientProvider>
     </div>
   );
-}
+} 
