@@ -1,20 +1,18 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Drawer, Button } from "antd";
+import { Drawer, Button, Select } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
-import { log } from "console";
 
-async function fetchPokemonList(limit: number = 20, offset: number = 0) {//offset : to skip
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);//wait for the response before furthering
-  if (!response.ok) {// if response is anything other than 2** throw an error
-      throw new Error("Failed to fetch Pokemon List");
-  }
+async function fetchPokemonList(limit: number, offset: number, type?: string) {//offset : to skip
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=1000`);//wait for the response before furthering
+  if (!response.ok) throw new Error("Failed to fetch Pokémon list");// if response is anything other than 2** throw an error
+
   //convert response body in js object
   //.json() method returns a promise which is why we use await to pause the exexution and get the result of the promise
   const data = await response.json();// this contains a result array with pokemon name and url
-
+  
   const detailedResults = await Promise.all(//will wait for all the promises to resolve.
     //returns a promise that resolves to an array of results of all promises
       data.results.map(async (pokemon: { name: string; url: string }) => {//iterate over data.result array to fetch basic pokemon details like the name and the url
@@ -22,59 +20,76 @@ async function fetchPokemonList(limit: number = 20, offset: number = 0) {//offse
           const details = await detailsResponse.json();//this will contain additional information of each pokemon like stats, sprite, etc
 
           const totalStats = details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
-              (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total
+              (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
           )
 
-          //details.type holds the value of types in the form of array
-          const types = details.types.map((type: { slot: number; type: { name: string } })=> type.type.name);//
-          //sligtly unambigious 
-          //there is the type object(1st type) which has two properties, these being slot(1st type and 2nd type) and the type(2nd type) of the pokemon which thereby contains name:
+      const types = details.types.map(
+        (typeObj: { type: { name: string } }) => typeObj.type.name//extracting name property of the type object for each element of the detail.type arrray
+      );
 
-          return {
-              name: pokemon.name,
-              id: details.id,
-              sprite: details.sprites.front_default,
-              totalStats,
-              cry: details.cries.latest,
-              types
-          }
-      })
-  )
-  return { results: detailedResults}//after finishing promise.all, fetchlist return an object which contains an array of pokemon object which has the detailed information on name, stats, sprite 
+      return {
+        name: pokemon.name,//from data.results
+        id: details.id,//from fetched details
+        sprite: details.sprites.front_default,//from fetched details
+        totalStats,//calculated above
+        types,//aray of strings
+      };
+    })
+  );
+
+  // Filter by type if a type is selected
+  const filteredResults = type
+    ? detailedResults.filter((pokemon) => pokemon.types.includes(type))
+    : detailedResults;
+
+  // Paginate the filtered results
+  const paginatedResults = filteredResults.slice(offset, offset + limit);
+
+  return { results: paginatedResults, total: filteredResults.length };
 }
 
 const fetchPokemonDetails = async (id: number) => {
-  const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);//ensures that the function pauses execution until fetch operation is complete
+  const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
   if (!res.ok) throw new Error("Failed to fetch Pokémon details");
   return res.json();
 };
 
-const HomePage/*: React.FC*/ = () => {//find the use for defining it as a functional component
-  const searchParams = useSearchParams();//will use later to get the query string value
-  const router = useRouter();//this will be used to go back and forth between pages. For example using router.push('/1) will navigate to the /1 route
+const HomePage = () => {
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
+  const currentPage = parseInt(searchParams.get("page") || "1");
+  const limit = 20;
+  const offset = (currentPage - 1) * limit;
 
-  const currentPage = parseInt(searchParams.get("page") || "1");//will store the value of the current page, later used for going to the previous page and the next page 
-  const limit = 20;//amount of items
-  const offset = (currentPage - 1) * limit;//items to skip
+  const [selectedType, setSelectedType] = useState<string | undefined>(
+    searchParams.get("type") || undefined
+  );
+  const [selectedPokemon, setSelectedPokemon] = useState<any>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
-  const [selectedPokemon, setSelectedPokemon] = useState<any>(null); // selecting the pokemon object for displaing in the drawer menu
-  const [drawerVisible, setDrawerVisible] = useState(false);// visibility of the drawer 
-
-  const { data, isLoading, error } = useQuery({//this will fetch the paginated list of the pokemon entries
-    queryKey: ["pokeList", currentPage],//defines the key 
-    queryFn: () => fetchPokemonList(limit, offset),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["pokeList", currentPage, selectedType],
+    queryFn: () => fetchPokemonList(limit, offset, selectedType),
     refetchOnWindowFocus: false,
   });
 
   const { data: pokemonDetails, isLoading: isDetailsLoading } = useQuery({
     queryKey: ["pokemonDetails", selectedPokemon?.id],
     queryFn: () => fetchPokemonDetails(selectedPokemon?.id),
-    enabled: !!selectedPokemon, 
+    enabled: !!selectedPokemon,
   });
 
   const handlePageChange = (newPage: number) => {
-    router.push(`/?page=${newPage}`);
+    const queryString = selectedType
+      ? `/?page=${newPage}&type=${selectedType}`
+      : `/?page=${newPage}`;
+    router.push(queryString);
+  };
+
+  const handleTypeChange = (type: string) => {
+    setSelectedType(type);
+    router.push(`/?page=1&type=${type}`);
   };
 
   const handleOpenDrawer = (pokemon: any) => {
@@ -93,36 +108,59 @@ const HomePage/*: React.FC*/ = () => {//find the use for defining it as a functi
   return (
     <div>
       <h1>Pokémon Page no : {searchParams.get("page")}</h1>
+
+      {/* Filter by Type */}
+      <div style={{ marginBottom: "20px" }}>
+        <Select
+          style={{ width: "200px" }}
+          placeholder="Select Pokémon Type"
+          onChange={handleTypeChange}
+          value={selectedType}
+          allowClear
+        >
+          {[
+            "normal",
+            "fire",
+            "water",
+            "grass",
+            "electric",
+            "ice",
+            "fighting",
+            "poison",
+            "ground",
+            "flying",
+            "psychic",
+            "bug",
+            "rock",
+            "ghost",
+            "dragon",
+            "dark",
+            "steel",
+            "fairy",
+          ].map((type) => (
+            <Select.Option key={type} value={type}>
+              {type.charAt(0).toUpperCase() + type.slice(1)}
+            </Select.Option>
+          ))}
+        </Select>
+      </div>
+
+      {/* Pokémon List */}
       <ul>
-        {data?.results.map(
-          (
-            pokemon: {
-              name: string;
-              id: number;
-              sprite: string;
-              totalStats: number;
-              cry: string;
-              types: string[];
-            },
-            index: number
-          ) => (
-            <li key={index}>
-              <button
-                onClick={() => handleOpenDrawer(pokemon)}
-              >
-                <p>{pokemon.id}</p>
-                <img
-                  src={pokemon.sprite}
-                />
-                <p>{pokemon.name}</p>
-                <p>{pokemon.types.join(", ")}</p>
-                <p>{pokemon.totalStats}</p>
-              </button>
-            </li>
-          )
-        )}
+        {data?.results.map((pokemon, index) => (
+          <li key={index}>
+            <button onClick={() => handleOpenDrawer(pokemon)}>
+              <p>{pokemon.id}</p>
+              <img src={pokemon.sprite} alt={pokemon.name} />
+              <p>{pokemon.name}</p>
+              <p>{pokemon.types.join(", ")}</p>
+              <p>{pokemon.totalStats}</p>
+            </button>
+          </li>
+        ))}
       </ul>
 
+      {/* Pagination */}
       <div>
         <button
           onClick={() => handlePageChange(currentPage - 1)}
@@ -133,12 +171,13 @@ const HomePage/*: React.FC*/ = () => {//find the use for defining it as a functi
         </button>
         <button
           onClick={() => handlePageChange(currentPage + 1)}
-          disabled={data.results.length < limit}
+          disabled={(data?.total || 0) <= offset + limit}
         >
           Next
         </button>
       </div>
 
+      {/* Pokémon Details Drawer */}
       <Drawer
         title={pokemonDetails?.name || "Pokémon Details"}
         placement="right"
@@ -154,9 +193,7 @@ const HomePage/*: React.FC*/ = () => {//find the use for defining it as a functi
             <p>Pokémon Name: {pokemonDetails.name}</p>
             <p>Height: {pokemonDetails.height}</p>
             <p>Weight: {pokemonDetails.weight}</p>
-            <img
-              src={pokemonDetails.sprites.front_default}
-            />
+            <img src={pokemonDetails.sprites.front_default} alt={pokemonDetails.name} />
           </div>
         ) : (
           <p>No details available.</p>
@@ -167,5 +204,3 @@ const HomePage/*: React.FC*/ = () => {//find the use for defining it as a functi
 };
 
 export default HomePage;
-
-
