@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const { Title, Text } = Typography;
 
 async function fetchPokemonList(limit: number, offset: number, type?: string, searchQuery?: string) {
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=1025`);//wait for the response before proceeding 
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=20`);//wait for the response before proceeding 
 
   if (!response.ok) throw new Error("Failed to fetch Pokémon list");// if response is anything other than 2** throw an error
 
@@ -16,7 +16,8 @@ async function fetchPokemonList(limit: number, offset: number, type?: string, se
   //.json() method returns a promise which is why we use await to pause the exexution and get the result of the promise
   const data = await response.json();// this contains a result array with pokemon name and url
 
-  const detailedResults = await Promise.all(//will wait for all the promises to resolve.
+  const detailedResults = await Promise.all(
+    //will wait for all the promises to resolve.
     
     //returns a promise that resolves to an array of results of all promises
     data.results.map(async (pokemon: { name: string; url: string }) => {//iterate over data.result array to fetch basic pokemon details like the name and the url
@@ -108,8 +109,8 @@ const HomePage = () => {
 
   const [searchQuery, setSearchQuery] = useState<string>(""); // Triggers the actual search
   const [searchText, setSearchText] = useState<string>(""); // Used for the input field
-  const [selectedType, setSelectedType] = useState<string | undefined>(
-    searchParams.get("type") || undefined //searchParams object gets the query parameter by key 'type
+  const [selectedType, setSelectedType] = useState<string>(
+    searchParams.get("type") || "" //searchParams object gets the query parameter by key 'type
   );
   const [selectedPokemon, setSelectedPokemon] = useState<any>(null);//selected pokemon to display on the drawer
   const [drawerVisible, setDrawerVisible] = useState(false);//visibility of the drawer component
