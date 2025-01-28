@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const { Title, Text } = Typography;
 
 async function fetchPokemonList(limit: number, offset: number, type?: string, searchQuery?: string) {
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=1025`);//wait for the response before furthering
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=1025`);//wait for the response before proceeding 
 
   if (!response.ok) throw new Error("Failed to fetch Pokémon list");// if response is anything other than 2** throw an error
 
@@ -29,6 +29,9 @@ async function fetchPokemonList(limit: number, offset: number, type?: string, se
       
       const species = await speciesResponse.json();
 
+      console.log("Hatch Counter for", pokemon.name, ":", species.hatch_counter);
+
+
       const totalStats = details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
         (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
     )
@@ -44,10 +47,11 @@ async function fetchPokemonList(limit: number, offset: number, type?: string, se
     })
   );
 
-  const description = species.flavor_text_entries.find(
+  const description = species.flavor_text_entries.filter(
     (entry: { language: { name: string }, flavor_text: string }) => 
-    entry.language.name === 'en')
-    ?.flavor_text
+    entry.language.name === 'en'
+  ).slice(0,3)
+  .map((entry: { flavor_text: any; }) => entry.flavor_text);
 
   //make a custom object, this making it easier to work with
   return {
@@ -56,6 +60,7 @@ async function fetchPokemonList(limit: number, offset: number, type?: string, se
     height: details.height,
     weight: details.weight,
     stats,
+    hatch_counter: species.hatch_counter,
     capture_rate: species.capture_rate,
     color: species.color.name,
     description, 
@@ -188,7 +193,7 @@ const HomePage = () => {
       sorter: (a: any, b: any) => a.totalStats - b.totalStats, // Sort by total stats
     },
     {
-      title: "Actions",
+      title: "More details",
       key: "actions",
       render: (_: any, record: any) => (
         <Button type="primary" onClick={() => handleOpenDrawer(record)}>
@@ -322,9 +327,26 @@ const HomePage = () => {
             </Row>
 
             <Row>
-              <Col span={24}>
+              <Col span={12}>
+                <Title level={4}>Hatch Counter</Title>
+                <Text>{selectedPokemon?.hatch_counter ?? "no data"}</Text>
+              </Col>
+              <Col span={12}>
+                <Title level={4}>Color</Title>
+                <Text>{selectedPokemon.color}</Text>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col span={12}>
                 <Title level={4}>Types</Title>
                 <Text>{selectedPokemon.types.join(", ")}</Text>
+              </Col>
+              <Col>
+              <Col span={26}>
+                <Title level={4}>Capture Rate</Title>
+                <Text>{selectedPokemon.capture_rate}%</Text>
+              </Col>
               </Col>
             </Row>
 
@@ -341,8 +363,8 @@ const HomePage = () => {
               rowKey="name"
             />
 
-            <Title level={4}>Total Stats</Title>
-            <Text>{selectedPokemon.totalStats}</Text>
+            <Title level={4}>Total Stats : {selectedPokemon.totalStats}</Title>
+            <Text></Text>
           </Card>
         ) : (
           <p>No details available.</p>
