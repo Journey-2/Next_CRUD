@@ -36,7 +36,7 @@ async function fetchPokemonList(limit: number, offset: number, type?: string) {/
       };
     })
   );
-
+ 
   // Filter by type if a type is selected
   const filteredResults = type
     ? detailedResults.filter((pokemon) => pokemon.types.includes(type))
