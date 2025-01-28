@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Drawer, Button, Select } from "antd";
+import { Drawer, Button, Select, Table } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
 
 async function fetchPokemonList(limit: number, offset: number, type?: string) {//offset : to skip
@@ -45,42 +45,45 @@ async function fetchPokemonList(limit: number, offset: number, type?: string) {/
     : detailedResults;//no filtering is done
 
   // Paginate the filtered results
-  const paginatedResults = filteredResults.slice(offset, offset + limit);//
+  const paginatedResults = filteredResults.slice(offset, offset + limit);//starting wiht offset and ending with offset+limit-1
 
   return { results: paginatedResults, total: filteredResults.length };
+  //results will hold the array of paginatedResult
+  //total will hold the total number of pokemon after filtering , helpful for pagination
 }
 
-const fetchPokemonDetails = async (id: number) => {
-  const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch Pokémon details");
-  return res.json();
-};
+// //could have gotten this from fetchPokemonList
+// const fetchPokemonDetails = async (id: number) => {
+//   const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+//   if (!res.ok) throw new Error("Failed to fetch Pokémon details");
+//   return res.json();
+// };
 
 const HomePage = () => {
-  const searchParams = useSearchParams();
-  const router = useRouter();
+  const searchParams = useSearchParams();//to read the query parameter 
+  const router = useRouter();//to append stuff to the url
 
-  const currentPage = parseInt(searchParams.get("page") || "1");
-  const limit = 20;
-  const offset = (currentPage - 1) * limit;
+  const currentPage = parseInt(searchParams.get("page") || "1");//searchParams object gets the query parameter by key "page"
+  const limit = 20;//no. of items on the page
+  const offset = (currentPage - 1) * limit;//items skipped
 
   const [selectedType, setSelectedType] = useState<string | undefined>(
-    searchParams.get("type") || undefined
+    searchParams.get("type") || undefined //searchParams object gets the query parameter by key 'type
   );
-  const [selectedPokemon, setSelectedPokemon] = useState<any>(null);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [selectedPokemon, setSelectedPokemon] = useState<any>(null);//selected pokemon to display on the drawer
+  const [drawerVisible, setDrawerVisible] = useState(false);//visibility of the drawer component
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["pokeList", currentPage, selectedType],
-    queryFn: () => fetchPokemonList(limit, offset, selectedType),
-    refetchOnWindowFocus: false,
+  const { data, isLoading, error } = useQuery({//will have the result of fetchPokemon list, i.e. object with result and total
+    queryKey: ["pokeList", currentPage, selectedType],//this will rerun whenever there is a change in currentPage or selecteType
+    queryFn: () => fetchPokemonList(limit, offset, selectedType),//call the function which will have these parameters for fetching
+    refetchOnWindowFocus: false,//do not refetch on focus; saves bandwidth 
   });
 
-  const { data: pokemonDetails, isLoading: isDetailsLoading } = useQuery({
-    queryKey: ["pokemonDetails", selectedPokemon?.id],
-    queryFn: () => fetchPokemonDetails(selectedPokemon?.id),
-    enabled: !!selectedPokemon,
-  });
+  // const { data: pokemonDetails, isLoading: isDetailsLoading } = useQuery({//will have the result of fetchPokemon list, i.e. object with result and total
+  //   queryKey: ["pokemonDetails", selectedPokemon?.id],//will run on changes to selectedPokemon.id
+  //   queryFn: () => fetchPokemonDetails(selectedPokemon?.id),
+  //   enabled: !!selectedPokemon,
+  // });
 
   const handlePageChange = (newPage: number) => {
     const queryString = selectedType
@@ -104,6 +107,52 @@ const HomePage = () => {
     setSelectedPokemon(null);
   };
 
+      //Below is the column definition for each column of the table.
+      const columns = [
+        {
+          title: "Dex Number",
+          dataIndex: "id",
+          key: "id"
+          // Column has the id/dex value of the Pokemon
+        },
+        {
+          title: "Sprite",
+          dataIndex: "sprite",
+          key: "sprite",
+          render: (spriteLink: string) => (<img src={spriteLink} alt="Sprite of the current pokemon" style={{ width: 50 }}/>)
+          //Column has the sprite of the pokemon displayed
+        },
+        {
+          title: "Name",
+          dataIndex: "name",
+          key: "name"
+          //Column has the name of the Pokemon displayed
+        },
+        {
+          title: "Types",
+          dataIndex: "types",
+          key: "types",
+          render: (types: String[]) => types.join(", ")
+          //Column has the type(s) of the Pokemon displayed
+        },
+        {
+          title: "Total Stats",
+          dataIndex: "totalStats",
+          key: "totalStats"
+          //Column has the total stat a Pokemon can have
+        },
+        {
+          title: "Actions",
+          key: "actions",
+          render: (_: any, record: any) => (
+          <Button type="primary" onClick={() => handleOpenDrawer(record)}>
+            View Details
+          </Button>
+          )
+          //This is tha action to open the drawer/further details about the Pokemon
+        }
+      ];
+
   if (isLoading) return <p>Loading Pokémon...</p>;
   if (error) return <p>Something went wrong.</p>;
 
@@ -112,10 +161,9 @@ const HomePage = () => {
       <h1>Pokémon Page no : {searchParams.get("page")}</h1>
 
       {/* Filter by Type */}
-      <div style={{ marginBottom: "20px" }}>
+      <div>
         <Select
-          style={{ width: "200px" }}
-          placeholder="Select Pokémon Type"
+          placeholder="Select Pokemon type..."
           onChange={handleTypeChange}
           value={selectedType}
           allowClear
@@ -147,55 +195,45 @@ const HomePage = () => {
         </Select>
       </div>
 
-      {/* Pokémon List */}
-      <ul>
-        {data?.results.map((pokemon, index) => (
-          <li key={index}>
-            <button onClick={() => handleOpenDrawer(pokemon)}>
-              <p>{pokemon.id}</p>
-              <img src={pokemon.sprite} alt={pokemon.name} />
-              <p>{pokemon.name}</p>
-              <p>{pokemon.types.join(", ")}</p>
-              <p>{pokemon.totalStats}</p>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <Table columns={columns} dataSource={data?.results} loading={isLoading} pagination={{
+        current: currentPage,
+        pageSize: limit,
+        total: data?.total,
+        onChange: handlePageChange
+      }}
+      rowKey="id" />
 
       {/* Pagination */}
       <div>
-        <button
+        <Button type="primary"
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          style={{ marginRight: "10px" }}
         >
           Previous
-        </button>
-        <button
+        </Button>
+        <Button type='primary'
           onClick={() => handlePageChange(currentPage + 1)}
           disabled={(data?.total || 0) <= offset + limit}
         >
           Next
-        </button>
+        </Button>
       </div>
 
       {/* Pokémon Details Drawer */}
       <Drawer
-        title={pokemonDetails?.name || "Pokémon Details"}
+        title={selectedPokemon?.name || "Pokémon Details"}
         placement="right"
         onClose={handleCloseDrawer}
         open={drawerVisible}
-        width={400}
+        width={800}
       >
-        {isDetailsLoading ? (
-          <p>Loading Pokémon details...</p>
-        ) : pokemonDetails ? (
+        {selectedPokemon ? (
           <div>
-            <p>Pokémon ID: {pokemonDetails.id}</p>
-            <p>Pokémon Name: {pokemonDetails.name}</p>
-            <p>Height: {pokemonDetails.height}</p>
-            <p>Weight: {pokemonDetails.weight}</p>
-            <img src={pokemonDetails.sprites.front_default} alt={pokemonDetails.name} />
+            <p>Pokémon ID: {selectedPokemon.id}</p>
+            <p>Pokémon Name: {selectedPokemon.name}</p>
+            <p>Height: {selectedPokemon.height}</p>
+            <p>Weight: {selectedPokemon.weight}</p>
+            <img src={selectedPokemon.sprite}/>
           </div>
         ) : (
           <p>No details available.</p>
