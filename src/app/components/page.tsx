@@ -27,6 +27,7 @@ async function fetchPokemonList(limit: number, offset: number, type?: string) {/
         (typeObj: { type: { name: string } }) => typeObj.type.name//extracting name property of the type object for each element of the detail.type arrray
       );
 
+      //make a custom object, this making it easier to work with
       return {
         name: pokemon.name,//from data.results
         id: details.id,//from fetched details
@@ -38,12 +39,13 @@ async function fetchPokemonList(limit: number, offset: number, type?: string) {/
   );
  
   // Filter by type if a type is selected
-  const filteredResults = type
-    ? detailedResults.filter((pokemon) => pokemon.types.includes(type))
-    : detailedResults;
+  const filteredResults = type//if type is defined 
+    //detailed result is just defined above containing the custom object name, id , total_stats, sprite and type 
+    ? detailedResults.filter((pokemon) => pokemon.types.includes(type))//this will only be set to true if the returned array contains the type specified in selected type
+    : detailedResults;//no filtering is done
 
   // Paginate the filtered results
-  const paginatedResults = filteredResults.slice(offset, offset + limit);
+  const paginatedResults = filteredResults.slice(offset, offset + limit);//
 
   return { results: paginatedResults, total: filteredResults.length };
 }
@@ -83,7 +85,7 @@ const HomePage = () => {
   const handlePageChange = (newPage: number) => {
     const queryString = selectedType
       ? `/?page=${newPage}&type=${selectedType}`
-      : `/?page=${newPage}`;
+      : `/?page=${newPage}&type='${undefined}`;
     router.push(queryString);
   };
 
