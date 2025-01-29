@@ -6,6 +6,7 @@ import { Drawer, Button, Select, Table, Card, Typography, Row, Col, Image, Input
 import { useRouter, useSearchParams } from "next/navigation";
 
 const { Title, Text } = Typography;
+
 async function fetchPaginatedPokemon(limit: number, offset: number) {
   const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);
   if (!response.ok) throw new Error("Failed to fetch Pokémon list");
@@ -22,7 +23,7 @@ async function fetchPaginatedPokemon(limit: number, offset: number) {
     
     const pokemonDetails = await pokemonDetailsResponse.json();
 
-    console.log(data.count)
+    // console.log(data.count)
 
 
     return {
@@ -30,6 +31,9 @@ async function fetchPaginatedPokemon(limit: number, offset: number) {
       id: parseInt(id, 10),
       sprite : pokemonDetails.sprites.other["official-artwork"].front_default,
       types : pokemonDetails.types.map((typeObj: any) => typeObj.type.name),
+      totalStats : pokemonDetails.stats.reduce(//details.stats holds the value of stat array, which has values like hp
+        (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
+      ),
     };
   }));
 
@@ -39,8 +43,56 @@ async function fetchPaginatedPokemon(limit: number, offset: number) {
   };
 }
 
+// // 2. Fetch for Search/Filter
+// async function fetchFilteredPokemon(type: string | null, searchQuery: string | null) {
+//   const baseUrl = "https://pokeapi.co/api/v2";
+//   let filteredResults: any[] = [];
 
-// 2. Fetch for Search/Filter
+//   if (type) {
+//     const typeResponse = await fetch(`${baseUrl}/type/${type}`);
+//     if (!typeResponse.ok) throw new Error("Failed to fetch Pokémon by type");
+//     const typeData = await typeResponse.json();
+//     filteredResults = typeData.pokemon.map((p: any) => ({
+//       name: p.pokemon.name,
+//       url: p.pokemon.url,
+//     }));
+    
+//   } else {
+//     const response = await fetch(`${baseUrl}/pokemon?limit=500`);
+//     if (!response.ok) throw new Error("Failed to fetch Pokémon list");
+//     const data = await response.json();
+//     filteredResults = data.results;
+//   }
+
+
+//   if (searchQuery) {
+//     filteredResults = filteredResults.filter((pokemon: any) =>
+//       pokemon.name.toLowerCase().includes(searchQuery.toLowerCase())
+//     );
+//   }
+
+//   const detailedResults = await Promise.all(
+//     filteredResults.slice(0, 500).map(async (pokemon: any) => {
+//       const detailsResponse = await fetch(pokemon.url);
+//       if (!detailsResponse.ok) throw new Error("Failed to fetch Pokémon details");
+//       const details = await detailsResponse.json();
+
+//       const types = details.types.map((t: any) => t.type.name);
+//       return {
+//         id: details.id,
+//         name: pokemon.name,
+//         types,
+//         totalStats : details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
+//           (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
+//         ),
+//         sprite: details.sprites.other["official-artwork"].front_default,
+//       };
+//     })
+//   );
+
+//   return detailedResults;
+// }
+
 async function fetchFilteredPokemon(type: string | null, searchQuery: string | null) {
   const baseUrl = "https://pokeapi.co/api/v2";
   let filteredResults: any[] = [];
@@ -53,43 +105,47 @@ async function fetchFilteredPokemon(type: string | null, searchQuery: string | n
       name: p.pokemon.name,
       url: p.pokemon.url,
     }));
-    
+  } else if (searchQuery) {
+    // Instead of fetching 500 Pokémon, directly fetch only the searched Pokémon
+    const searchResponse = await fetch(`${baseUrl}/pokemon/${searchQuery.toLowerCase()}`);
+    if (searchResponse.ok) {
+      const details = await searchResponse.json();
+      return [{
+        id: details.id,
+        name: details.name,
+        types: details.types.map((t: any) => t.type.name),
+        totalStats: details.stats.reduce((sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0),
+        sprite: details.sprites.other["official-artwork"].front_default,
+      }];
+    }
+    return []; // Return empty if no Pokémon is found
   } else {
-    const response = await fetch(`${baseUrl}/pokemon?limit=500`);
+    const response = await fetch(`${baseUrl}/pokemon?limit=50`); // Reduce from 500 to 50
     if (!response.ok) throw new Error("Failed to fetch Pokémon list");
     const data = await response.json();
     filteredResults = data.results;
   }
 
-
-  if (searchQuery) {
-    filteredResults = filteredResults.filter((pokemon: any) =>
-      pokemon.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }
-
-  const detailedResults = await Promise.all(
-    filteredResults.slice(0, 500).map(async (pokemon: any) => {
+  return Promise.all(
+    filteredResults.slice(0, 50).map(async (pokemon: any) => {
       const detailsResponse = await fetch(pokemon.url);
       if (!detailsResponse.ok) throw new Error("Failed to fetch Pokémon details");
       const details = await detailsResponse.json();
-
-      const types = details.types.map((t: any) => t.type.name);
       return {
         id: details.id,
         name: pokemon.name,
-        types,
+        types: details.types.map((t: any) => t.type.name),
+        totalStats: details.stats.reduce((sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0),
         sprite: details.sprites.other["official-artwork"].front_default,
       };
     })
   );
-
-  return detailedResults;
 }
 
+
 // 3. Fetch for Individual Pokémon
-async function fetchPokemonDetails(pokemonUrl: string) {
-  const response = await fetch(pokemonUrl);
+async function fetchPokemonDetails(pokemonId: number) {
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonId}`);
   if (!response.ok) throw new Error("Failed to fetch Pokémon details");
 
   const details = await response.json();
@@ -124,26 +180,29 @@ async function fetchPokemonDetails(pokemonUrl: string) {
 }
 
 const HomePage = () => {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams();  // Read query params from URL
   const router = useRouter();
 
-  const currentPage = parseInt(searchParams.get("page") || "1");
-  // const limit = 20;
+  const currentPage = parseInt(searchParams.get("page") || "1", 10);  // Default to page 1 if not present
+  const initialSearchQuery = searchParams.get("search") || "";  // Default to empty search query
+  const initialType = searchParams.get("type") || null;  // Default to null if type not selected
 
-  const [searchQuery, setSearchQuery] = useState<string>(""); 
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>(initialSearchQuery);
+  const [selectedType, setSelectedType] = useState<string | null>(initialType);
+
+  // const searchQuery = searchParams.get("search") || ""; // Default to empty search query
+  // const selectedType = searchParams.get("type") || null; // Default
+
   const [selectedPokemon, setSelectedPokemon] = useState<any>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [pageSize, setPageSize] = useState<number>(20)
-  
-  const offset = (currentPage - 1) * pageSize;
+  const [pageSize, setPageSize] = useState<number>(20);
 
+  const offset = (currentPage - 1) * pageSize;
 
   // Fetch Paginated Data
   const { data: paginatedData, isLoading: isPaginatedLoading } = useQuery({
-    queryKey: ["paginatedPokemon", currentPage],
+    queryKey: ["paginatedPokemon", currentPage, pageSize],
     queryFn: () => fetchPaginatedPokemon(pageSize, offset),
-    // keepPreviousData: true,
   });
 
   // Fetch Filtered Data
@@ -154,28 +213,65 @@ const HomePage = () => {
   });
 
   // Fetch Individual Pokémon Details
-  const { data: pokemonDetails, isLoading: isDetailsLoading } = useQuery({
-    queryKey: ["pokemonDetails", selectedPokemon?.url],
-    queryFn: () => fetchPokemonDetails(selectedPokemon?.url || ""),
+  const { data: pokemonDetails } = useQuery({
+    queryKey: ["pokemonDetails", selectedPokemon?.id],
+    queryFn: () => fetchPokemonDetails(selectedPokemon?.id || ""),
     enabled: !!selectedPokemon, // Run only when a Pokémon is selected
   });
 
-  
-
   const handlePageChange = (newPage: number) => {
-    router.push(`/?page=${newPage}`);
+    // setSearchQuery('')
+    // setSelectedType(null)
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+ 
+    router.push(`/?${params.toString()}`);
   };
-
-  const handleTypeChange = (type: string) => {
+ 
+  const handleTypeChange = (type: string | null) => {
     setSelectedType(type);
-    // router.push(`/?type=${type}`);
+    const params = new URLSearchParams(searchParams.toString());
+ 
+    if (type) {
+        params.set("type", type);
+    } else {
+        params.delete("type");
+    }
+ 
+    params.set("page", "1"); 
+ 
+    router.push(`/?${params.toString()}`);
   };
-
+ 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(event.target.value);
-    // router.push(`&&/?search`)
+    const value = event.target.value;
+    setSearchQuery(value)
+    const params = new URLSearchParams(searchParams.toString());
+ 
+    if (value) {
+      params.set("search", value);
+    } else {
+      params.delete("search");
+    }
+ 
+    params.set("page", "1"); // Reset page when searching
+ 
+    router.push(`/?${params.toString()}`);
   };
 
+  const handleReset = () => {
+    setSearchQuery('')
+    setSelectedType(null)
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.delete("search");
+    params.delete("type")
+
+    params.set("page", "1");
+
+    router.push(`/?${params.toString()}`);
+  }
+  
   const handleOpenDrawer = (pokemon: any) => {
     setSelectedPokemon(pokemon);
     setDrawerVisible(true);
@@ -204,12 +300,25 @@ const HomePage = () => {
       title: "Name",
       dataIndex: "name",
       key: "name",
+      sorter: (a: any, b: any) => a.name.localeCompare(b.name),
+      render : (name:string) =>{
+        return name.charAt(0).toUpperCase() + name.slice(1)
+      }
     },
     {
       title: "Types",
       dataIndex: "types",
       key: "types",
-      render: (types: string[]=[]) => types.join(", "),
+      render: (types: string[]=[]) => {
+        return types
+        .map((type:string)=>type.charAt(0).toUpperCase() + type.slice(1))
+        .join(", ")
+    }},
+    {
+      title: "totalStats",
+      dataIndex: "totalStats",
+      key : "totalStats",   
+      sorter: (a: any, b: any) => a.totalStats - b.totalStats
     },
     {
       title: "Actions",
@@ -227,38 +336,38 @@ const HomePage = () => {
   return (
     <div>
       <h1>Pokémon</h1>
-      <Row gutter={16} align="middle">
-          <Title level={3}><Text>Search Pokémon: </Text></Title>
-          <Input
-            placeholder="Search Pokémon"
-            onChange={handleSearchChange}
-            style={{
-              width: 150,
-              height: 30,
-              marginTop:20
-            }}
-          />
-      </Row>
-
       <Row>
-        <Title level={3}><Text>Select Type: </Text></Title>
-        <Select
-          placeholder="Select Type"
-          onChange={handleTypeChange}
-          allowClear
-          style={{
-            width: 150,
-            height: 30,
-            marginTop:30
-          }}
-        >
+      <label htmlFor="searchPokemon">Enter the name of the Pokemon:</label>
+      <Input
+        id="searchPokemon"
+        placeholder="Search Pokémon"
+        onChange={handleSearchChange}
+        style = {{ width:500,}}
+        value={searchQuery}
+      />
+      </Row>
+      <Row>
+        <label htmlFor="selectType">Filter by type:</label>
+      <Select
+        id="selectType"
+        placeholder="Select Type"
+        onChange={handleTypeChange}
+        value={selectedType}
+        allowClear
+        style = {{}}
+      >
           {['Bug', 'Dark', 'Dragon', 'Electric', 'Fairy', 'Fighting', 'Fire', 'Flying', 'Ghost', 'Grass', 'Ground', 'Ice', 'Normal', 'Poison', 'Psychic', 'Rock', 'Steel', 'Water'].map((type) => (
             <Select.Option key={type} value={type}>
               {type}
             </Select.Option>
           ))}
-        </Select> 
-      </Row>
+        </Select>
+        </Row> 
+
+        <Button
+        type="primary"
+        onClick={handleReset}
+        >Reset</Button>
       <Table
         columns={columns}
         dataSource={filteredData || paginatedData?.results}
@@ -266,9 +375,11 @@ const HomePage = () => {
         pagination={{
           current: currentPage,
           pageSize: pageSize,
-          onShowSizeChange:(cuurent, size) => {setPageSize(size)},
+          pageSizeOptions: ["10","20","50","100","1025"],
+          onShowSizeChange:(current, size) => {setPageSize(size)},
           onChange: handlePageChange,
           total: filteredData ? filteredData.length : paginatedData?.total,
+          showTotal : total => `Total ${total}`
         }}
         rowKey="id"
       />
