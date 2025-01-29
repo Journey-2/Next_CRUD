@@ -6,145 +6,174 @@ import { Drawer, Button, Select, Table, Card, Typography, Row, Col, Image, Input
 import { useRouter, useSearchParams } from "next/navigation";
 
 const { Title, Text } = Typography;
+async function fetchPaginatedPokemon(limit: number, offset: number) {
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);
+  if (!response.ok) throw new Error("Failed to fetch Pokémon list");
 
-async function fetchPokemonList(limit: number, offset: number, type?: string, searchQuery?: string) {
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=20`);//wait for the response before proceeding 
+  const data = await response.json();
+  
+  // Fetch details for each Pokémon to get sprite and types
+  const resultsWithIdsSpritesAndTypes = await Promise.all(data.results.map(async (pokemon: any) => {
+    const id = pokemon.url.split("/").slice(-2, -1)[0]; // Extract ID from the URL
+    
+    // Fetch individual Pokémon details to get sprite and types
+    const pokemonDetailsResponse = await fetch(pokemon.url);
+    if (!pokemonDetailsResponse.ok) throw new Error(`Failed to fetch details for ${pokemon.name}`);
+    
+    const pokemonDetails = await pokemonDetailsResponse.json();
 
-  if (!response.ok) throw new Error("Failed to fetch Pokémon list");// if response is anything other than 2** throw an error
+    console.log(data.count)
 
-  //convert response body in js object
-  //.json() method returns a promise which is why we use await to pause the exexution and get the result of the promise
-  const data = await response.json();// this contains a result array with pokemon name and url
+
+    return {
+      ...pokemon,
+      id: parseInt(id, 10),
+      sprite : pokemonDetails.sprites.other["official-artwork"].front_default,
+      types : pokemonDetails.types.map((typeObj: any) => typeObj.type.name),
+    };
+  }));
+
+  return {
+    results: resultsWithIdsSpritesAndTypes,
+    total: data.count,
+  };
+}
+
+
+// 2. Fetch for Search/Filter
+async function fetchFilteredPokemon(type: string | null, searchQuery: string | null) {
+  const baseUrl = "https://pokeapi.co/api/v2";
+  let filteredResults: any[] = [];
+
+  if (type) {
+    const typeResponse = await fetch(`${baseUrl}/type/${type}`);
+    if (!typeResponse.ok) throw new Error("Failed to fetch Pokémon by type");
+    const typeData = await typeResponse.json();
+    filteredResults = typeData.pokemon.map((p: any) => ({
+      name: p.pokemon.name,
+      url: p.pokemon.url,
+    }));
+    
+  } else {
+    const response = await fetch(`${baseUrl}/pokemon?limit=500`);
+    if (!response.ok) throw new Error("Failed to fetch Pokémon list");
+    const data = await response.json();
+    filteredResults = data.results;
+  }
+
+
+  if (searchQuery) {
+    filteredResults = filteredResults.filter((pokemon: any) =>
+      pokemon.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }
 
   const detailedResults = await Promise.all(
-    //will wait for all the promises to resolve.
-    
-    //returns a promise that resolves to an array of results of all promises
-    data.results.map(async (pokemon: { name: string; url: string }) => {//iterate over data.result array to fetch basic pokemon details like the name and the url
-      
-      const detailsResponse = await fetch(pokemon.url);//for each pokemon you are fetching additional details from url as it contains the endpoints
-      
-      const details = await detailsResponse.json();//this will contain additional information of each pokemon like stats, sprite, etc
-      
-      const speciesResponse = await fetch(details.species.url);//this will contain additional information such as the description, egg group, etc
-      
-      const species = await speciesResponse.json();
+    filteredResults.slice(0, 500).map(async (pokemon: any) => {
+      const detailsResponse = await fetch(pokemon.url);
+      if (!detailsResponse.ok) throw new Error("Failed to fetch Pokémon details");
+      const details = await detailsResponse.json();
 
-      console.log("Hatch Counter for", pokemon.name, ":", species.hatch_counter);
-
-
-      const totalStats = details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
-        (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
-    )
-
-  const types = details.types.map(
-    (typeObj: { type: { name: string } }) => typeObj.type.name//extracting name property of the type object for each element of the detail.type arrray
-  );
-
-  const stats = details.stats.map(
-    (stat: { base_stat: number, stat: { name: string } }) => ({
-      name: stat.stat.name,
-      baseStat: stat.base_stat
+      const types = details.types.map((t: any) => t.type.name);
+      return {
+        id: details.id,
+        name: pokemon.name,
+        types,
+        sprite: details.sprites.other["official-artwork"].front_default,
+      };
     })
   );
 
-  const description = species.flavor_text_entries.filter(
-    (entry: { language: { name: string }, flavor_text: string }) => 
-    entry.language.name === 'en'
-  ).slice(0,3)
-  .map((entry: { flavor_text: any; }) => entry.flavor_text);
-
-  //make a custom object, this making it easier to work with
-  return {
-    name: pokemon.name,//from data.results
-    id: details.id,//from fetched details
-    height: details.height,
-    weight: details.weight,
-    stats,
-    hatch_counter: species.hatch_counter,
-    capture_rate: species.capture_rate,
-    color: species.color.name,
-    description, 
-    sprite: details.sprites.other['official-artwork'].front_default,//from fetched details
-    totalStats,//calculated above
-    types,//aray of strings
-  };
-})
-);
-
-  // Filter by type if a type is selected
-  const filteredResults = type//if type is defined 
-    //detailed result is just defined above containing the custom object name, id , total_stats, sprite and type 
-    ? detailedResults.filter((pokemon) => pokemon.types.includes(type))//this will only be set to true if the returned array contains the type specified in selected type
-    : detailedResults;//no filtering is done
-
-    const searchFilteredResults = searchQuery
-    ? filteredResults.filter((pokemon) => pokemon.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : filteredResults;
-
-  // Paginate the filtered results
-  const paginatedResults = searchFilteredResults.slice(offset, offset + limit);
-
-  console.log("Results object:", { results: paginatedResults, total: filteredResults.length }); //log the results object
-
-  return { results: paginatedResults, total: filteredResults.length };
-  //results will hold the array of paginatedResult
-  //total will hold the total number of pokemon after filtering , helpful for pagination
+  return detailedResults;
 }
 
-// //could have gotten this from fetchPokemonList
-// const fetchPokemonDetails = async (id: number) => {
-//   const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-//   if (!res.ok) throw new Error("Failed to fetch Pokémon details");
-//   return res.json();
-// };
+// 3. Fetch for Individual Pokémon
+async function fetchPokemonDetails(pokemonUrl: string) {
+  const response = await fetch(pokemonUrl);
+  if (!response.ok) throw new Error("Failed to fetch Pokémon details");
+
+  const details = await response.json();
+  const speciesResponse = await fetch(details.species.url);
+  if (!speciesResponse.ok) throw new Error("Failed to fetch Pokémon species");
+  const species = await speciesResponse.json();
+
+  const description = species.flavor_text_entries
+    .filter((entry: any) => entry.language.name === "en")
+    .slice(0, 3)
+    .map((entry: any) => entry.flavor_text);
+
+  return {
+    id: details.id,
+    name: details.name,
+    height: details.height,
+    weight: details.weight ,
+    stats: details.stats.map((stat: any) => ({
+      name: stat.stat.name,
+      baseStat: stat.base_stat,
+    })),
+    totalStats : details.stats.reduce(//details.stats holds the value of stat array, which has values like hp
+      (sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0//reduce will apply a function to the element of the array and return a single value, in this case it's all being summed into total stats
+    ),
+    types: details.types.map((typeObj: any) => typeObj.type.name),
+    description: description || [], 
+    sprite: details.sprites.other["official-artwork"].front_default,
+    color: species.color.name,
+    hatch_counter: species.hatch_counter,
+    capture_rate: species.capture_rate,
+  };
+}
 
 const HomePage = () => {
-  const searchParams = useSearchParams();//to read the query parameter 
-  const router = useRouter();//to append stuff to the url
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const currentPage = parseInt(searchParams.get("page") || "1");//searchParams object gets the query parameter by key "page"
-  const limit = 20;//no. of items on the page
-  const offset = (currentPage - 1) * limit;//items skipped
+  const currentPage = parseInt(searchParams.get("page") || "1");
+  // const limit = 20;
 
-  const [searchQuery, setSearchQuery] = useState<string>(""); // Triggers the actual search
-  const [searchText, setSearchText] = useState<string>(""); // Used for the input field
-  const [selectedType, setSelectedType] = useState<string>(
-    searchParams.get("type") || "" //searchParams object gets the query parameter by key 'type
-  );
-  const [selectedPokemon, setSelectedPokemon] = useState<any>(null);//selected pokemon to display on the drawer
-  const [drawerVisible, setDrawerVisible] = useState(false);//visibility of the drawer component
+  const [searchQuery, setSearchQuery] = useState<string>(""); 
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedPokemon, setSelectedPokemon] = useState<any>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(20)
+  
+  const offset = (currentPage - 1) * pageSize;
 
-  const { data, isLoading, error } = useQuery({//will have the result of fetchPokemon list, i.e. object with result and total
-    queryKey: ["pokeList", currentPage, selectedType, searchQuery],//this will rerun whenever there is a change in currentPage or selecteType
-    queryFn: () => fetchPokemonList(limit, offset, selectedType, searchQuery),//call the function which will have these parameters for fetching
-    refetchOnWindowFocus: false,//do not refetch on focus; saves bandwidth 
+
+  // Fetch Paginated Data
+  const { data: paginatedData, isLoading: isPaginatedLoading } = useQuery({
+    queryKey: ["paginatedPokemon", currentPage],
+    queryFn: () => fetchPaginatedPokemon(pageSize, offset),
+    // keepPreviousData: true,
   });
 
-  // const { data: pokemonDetails, isLoading: isDetailsLoading } = useQuery({//will have the result of fetchPokemon list, i.e. object with result and total
-  //   queryKey: ["pokemonDetails", selectedPokemon?.id],//will run on changes to selectedPokemon.id
-  //   queryFn: () => fetchPokemonDetails(selectedPokemon?.id),
-  //   enabled: !!selectedPokemon,
-  // });
+  // Fetch Filtered Data
+  const { data: filteredData, isLoading: isFilteredLoading } = useQuery({
+    queryKey: ["filteredPokemon", selectedType, searchQuery],
+    queryFn: () => fetchFilteredPokemon(selectedType, searchQuery),
+    enabled: !!selectedType || !!searchQuery, // Run only if filter or search is applied
+  });
+
+  // Fetch Individual Pokémon Details
+  const { data: pokemonDetails, isLoading: isDetailsLoading } = useQuery({
+    queryKey: ["pokemonDetails", selectedPokemon?.url],
+    queryFn: () => fetchPokemonDetails(selectedPokemon?.url || ""),
+    enabled: !!selectedPokemon, // Run only when a Pokémon is selected
+  });
+
+  
 
   const handlePageChange = (newPage: number) => {
-    const queryString = selectedType
-      ? `/?page=${newPage}&type=${selectedType}`
-      : `/?page=${newPage}`;
-    router.push(queryString);
+    router.push(`/?page=${newPage}`);
   };
 
   const handleTypeChange = (type: string) => {
     setSelectedType(type);
-    router.push(`/?page=1&type=${type}`);
+    // router.push(`/?type=${type}`);
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchText(event.target.value); // Update the search text as the user types
-  };
-
-  const handleSearchClick = () => {
-    setSearchQuery(searchText); // Trigger the search with the current input value
+    setSearchQuery(event.target.value);
+    // router.push(`&&/?search`)
   };
 
   const handleOpenDrawer = (pokemon: any) => {
@@ -168,33 +197,22 @@ const HomePage = () => {
       dataIndex: "sprite",
       key: "sprite",
       render: (spriteLink: string) => (
-        <img
-          src={spriteLink}
-          alt="Sprite of the current pokemon"
-          style={{ width: 50 }}
-        />
+        <img src={spriteLink} alt="Sprite" style={{ width: 50 }} />
       ),
     },
     {
       title: "Name",
       dataIndex: "name",
       key: "name",
-      sorter: (a: any, b: any) => a.name.localeCompare(b.name), // Alphabetical sorting
     },
     {
       title: "Types",
       dataIndex: "types",
       key: "types",
-      render: (types: string[]) => types.join(", "),
+      render: (types: string[]=[]) => types.join(", "),
     },
     {
-      title: "Total Stats",
-      dataIndex: "totalStats",
-      key: "totalStats",
-      sorter: (a: any, b: any) => a.totalStats - b.totalStats, // Sort by total stats
-    },
-    {
-      title: "More details",
+      title: "Actions",
       key: "actions",
       render: (_: any, record: any) => (
         <Button type="primary" onClick={() => handleOpenDrawer(record)}>
@@ -204,149 +222,117 @@ const HomePage = () => {
     },
   ];
 
-  if (isLoading) return <p>Loading Pokémon...</p>;
-  if (error) return <p>Something went wrong.</p>;
+  const isLoading = isPaginatedLoading || isFilteredLoading;
 
   return (
     <div>
-      <h1>Pokémon Page no : {searchParams.get("page")}</h1>
-      <div>
-        <Input
-          placeholder="Search for Pokémon"
-          value={searchText}
-          onChange={handleSearchChange}
-          style={{ width: 200, marginBottom: 20, marginRight: 10 }}
-        />
-        <Button type="primary" onClick={handleSearchClick}>
-          Search
-        </Button>
-      </div>
+      <h1>Pokémon</h1>
+      <Row gutter={16} align="middle">
+          <Title level={3}><Text>Search Pokémon: </Text></Title>
+          <Input
+            placeholder="Search Pokémon"
+            onChange={handleSearchChange}
+            style={{
+              width: 150,
+              height: 30,
+              marginTop:20
+            }}
+          />
+      </Row>
 
-      <div>
+      <Row>
+        <Title level={3}><Text>Select Type: </Text></Title>
         <Select
-          placeholder="Select Pokemon type..."
+          placeholder="Select Type"
           onChange={handleTypeChange}
-          value={selectedType}
           allowClear
+          style={{
+            width: 150,
+            height: 30,
+            marginTop:30
+          }}
         >
-          {[
-            "normal",
-            "fire",
-            "water",
-            "grass",
-            "electric",
-            "ice",
-            "fighting",
-            "poison",
-            "ground",
-            "flying",
-            "psychic",
-            "bug",
-            "rock",
-            "ghost",
-            "dragon",
-            "dark",
-            "steel",
-            "fairy",
-          ].map((type) => (
+          {['Bug', 'Dark', 'Dragon', 'Electric', 'Fairy', 'Fighting', 'Fire', 'Flying', 'Ghost', 'Grass', 'Ground', 'Ice', 'Normal', 'Poison', 'Psychic', 'Rock', 'Steel', 'Water'].map((type) => (
             <Select.Option key={type} value={type}>
               {type}
             </Select.Option>
           ))}
-        </Select>
-      </div>
-
+        </Select> 
+      </Row>
       <Table
         columns={columns}
-        dataSource={data?.results}
+        dataSource={filteredData || paginatedData?.results}
         loading={isLoading}
         pagination={{
           current: currentPage,
-          pageSize: limit,
-          total: data?.total,
+          pageSize: pageSize,
+          onShowSizeChange:(cuurent, size) => {setPageSize(size)},
           onChange: handlePageChange,
+          total: filteredData ? filteredData.length : paginatedData?.total,
         }}
         rowKey="id"
       />
 
-      {/* redundant now */}
-      {/* Pagination
-      <div>
-        <Button type="primary"
-          onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-        >
-          Previous
-        </Button>
-        <Button type='primary'
-          onClick={() => handlePageChange(currentPage + 1)}
-          disabled={(data?.total || 0) <= offset + limit}
-        >
-          Next
-        </Button>
-      </div> */}
-
       <Drawer
-        title={selectedPokemon?.name.toUpperCase() || "Pokémon Details"}
-        placement="right"
-        onClose={handleCloseDrawer}
+        title={pokemonDetails?.name.toUpperCase() || "Details"}
         open={drawerVisible}
+        onClose={handleCloseDrawer}
         width={800}
       >
-        {selectedPokemon ? (
-          <Card>
+        {pokemonDetails && (
+        <Card>
             <Row>
               <Col span={8}>
-                <Image src={selectedPokemon.sprite} style={{ width: 200 }} />
+                <Image src={pokemonDetails.sprite} style={{ width: 200 }} />
               </Col>
               <Col span={16}>
                 <Title level={4}>Description</Title>
-                <Text>{selectedPokemon.description}</Text>
+                <Text>{pokemonDetails.description}</Text>
               </Col>
             </Row>
 
             <Row>
               <Col span={12}>
                 <Title level={4}>Pokémon ID</Title>
-                <Text>{selectedPokemon.id}</Text>
+                <Text>{pokemonDetails.id}</Text>
               </Col>
               <Col span={12}>
                 <Title level={4}>Height</Title>
-                <Text>{selectedPokemon.height / 10} meters</Text>
+                <Text>{pokemonDetails.height / 10} meters</Text>
               </Col>
             </Row>
 
             <Row>
               <Col span={12}>
                 <Title level={4}>Weight</Title>
-                <Text>{selectedPokemon.weight} kg</Text>
+                <Text>{pokemonDetails.weight} kg</Text>
               </Col>
               <Col span={12}>
                 <Title level={4}>Color</Title>
-                <Text>{selectedPokemon.color}</Text>
+                <Text>{pokemonDetails.color}</Text>
               </Col>
             </Row>
 
             <Row>
               <Col span={12}>
                 <Title level={4}>Hatch Counter</Title>
-                <Text>{selectedPokemon?.hatch_counter ?? "no data"}</Text>
+                <Text>{pokemonDetails.hatch_counter ?? "no data"}</Text>
               </Col>
               <Col span={12}>
                 <Title level={4}>Color</Title>
-                <Text>{selectedPokemon.color}</Text>
+                <Text>{pokemonDetails.color}</Text>
               </Col>
             </Row>
 
             <Row>
               <Col span={12}>
                 <Title level={4}>Types</Title>
-                <Text>{selectedPokemon.types.join(", ")}</Text>
+                <Text>{pokemonDetails.types.join(", ")}</Text>
               </Col>
               <Col>
               <Col span={26}>
                 <Title level={4}>Capture Rate</Title>
-                <Text>{selectedPokemon.capture_rate}%</Text>
+                <Text>{pokemonDetails.capture_rate}%</Text>
               </Col>
               </Col>
             </Row>
@@ -357,18 +343,16 @@ const HomePage = () => {
                 { title: "Stat", dataIndex: "name", key: "name" },
                 { title: "Base Stat", dataIndex: "baseStat", key: "baseStat" },
               ]}
-              dataSource={selectedPokemon.stats}
+              dataSource={pokemonDetails.stats}
               pagination={false}
               bordered
               size="small"
               rowKey="name"
             />
 
-            <Title level={4}>Total Stats : {selectedPokemon.totalStats}</Title>
+            <Title level={4}>Total Stats : {pokemonDetails.totalStats}</Title>
             <Text></Text>
           </Card>
-        ) : (
-          <p>No details available.</p>
         )}
       </Drawer>
     </div>
