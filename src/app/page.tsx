@@ -7,6 +7,9 @@ import PokemonTable from './components/PokemonTable';
 import { fetchPokemonDetails, fetchFilteredPokemon, fetchPaginatedPokemon } from './services/fetchPokemon';
 import { useQuery } from '@tanstack/react-query';
 import { usePokemonStore } from './store/usePokeomonStore';
+import { Typography } from 'antd';
+
+const {Text, Title} = Typography
 
 
 export default function Home() {
@@ -41,7 +44,7 @@ export default function Home() {
 
   return (
     <div>
-        <h1>Pokémon</h1>
+        <h1>Pokemon</h1>
         <SearchFilter />
         <PokemonTable data={filteredData || paginatedData?.results || []} isLoading={isPaginatedLoading || isFilteredLoading} filteredData={filteredData} paginatedData={paginatedData}/>
         <PokemonDrawer />

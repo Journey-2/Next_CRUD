@@ -1,5 +1,38 @@
 import { create } from "zustand";
  
+export type Pokemon = {
+    id: number;
+    name: string;
+    sprite: string;
+    types: string[];
+    totalStats: number;
+  };
+ 
+export type PaginatedPokemonResponse = {
+    results: Pokemon[];
+    total: number;
+  };
+ 
+export type Stat = {
+    base_stat: number;
+    stat: { name: string };
+  };
+ 
+export type PokemonDetails = {
+    id: number;
+    name: string;
+    height: number;
+    weight: number;
+    stats: { name: string; baseStat: number }[];
+    totalStats: number;
+    types: string[];
+    description: string[];
+    sprite: string;
+    color: string;
+    hatch_counter: number;
+    capture_rate: number;
+  };
+ 
 type PokemonState = {
     currentPage: number;
     searchQuery: string;

@@ -1,6 +1,8 @@
-import { Input, Select, Button, Row } from "antd";
+import { Input, Select, Button, Row, Typography } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePokemonStore } from "../store/usePokeomonStore";
+
+const { Text} = Typography
  
 const SearchFilter = () => {
   const searchParams = useSearchParams();
@@ -22,7 +24,7 @@ const SearchFilter = () => {
         params.delete("search");
     }
    
-    params.set("page", "1"); // Reset page when searching
+    params.set("page", "1");
    
     router.push(`/?${params.toString()}`);
 };
@@ -58,26 +60,23 @@ const SearchFilter = () => {
  
   return (
     <div>
-      <Row>
-      <label htmlFor="searchPokemon">Enter the name of the Pokemon:</label>
+      <Text style={{marginRight: 10}}>Enter the name of the Pokemon:</Text>
       <Input
         id="searchPokemon"
         placeholder="Search Pokémon"
         onChange={handleSearchInputChange}
-        style = {{ width:500,}}
+        style = {{ width:200,}}
         value={searchQuery}
       />
-      <Button type="primary" onClick={handleSearchChangeButtonClick}>Search</Button>
-      </Row>
-      <Row>
-        <label htmlFor="selectType">Filter by type:</label>
+      <Button type="primary" onClick={handleSearchChangeButtonClick} style={{marginLeft:10, marginRight:40}}>Search</Button>
+      <Text style={{marginRight: 10}}>Filter by type:</Text>
       <Select
         id="selectType"
         placeholder="Select Type"
         onChange={handleTypeChange}
         value={selectedType}
         allowClear
-        style = {{}}
+        style = {{marginBottom:20}}
       >
           {['Bug', 'Dark', 'Dragon', 'Electric', 'Fairy', 'Fighting', 'Fire', 'Flying', 'Ghost', 'Grass', 'Ground', 'Ice', 'Normal', 'Poison', 'Psychic', 'Rock', 'Steel', 'Water'].map((type) => (
             <Select.Option key={type} value={type}>
@@ -85,9 +84,8 @@ const SearchFilter = () => {
             </Select.Option>
           ))}
         </Select>
-        </Row>
  
-        {(selectedType || searchQuery) && <Button type="primary" onClick={handleReset}>Reset</Button>}
+        {(selectedType || searchQuery) && <Button type="primary" style={{marginLeft:20}} onClick={handleReset}>Reset</Button>}
     </div>
   );
 };
