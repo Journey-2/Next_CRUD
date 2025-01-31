@@ -1,45 +1,80 @@
 import { PaginatedPokemonResponse, Stat, PokemonDetails, Pokemon } from "../store/usePokeomonStore";
  
-// This function fetches Pokemon according to the pagination option chosen in the UI
-export async function fetchPaginatedPokemon(limit: number, offset: number): Promise<PaginatedPokemonResponse> {
+  //asynchronous function which will return a value of type PaginatedPokemonResponse 
+  export async function fetchPaginatedPokemon(limit: number, offset: number): Promise<PaginatedPokemonResponse> {
+
+  //fetching and storing the response based on the limit and offset
   const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);
+
+  //throw an error if the response is not of type 200's
   if (!response.ok) throw new Error("Failed to fetch Pokémon list");
- 
+
+  //response includes meta data like status and head. 
+  //now we will extract the body by using .json() function
   const data: { results: { name: string; url: string }[]; count: number } = await response.json();
- 
+
+  //create an array of Promises by mapping over data.results
+  //each Promise fetches additional details for a Pokémon
   const resultsWithIdsSpritesAndTypes = await Promise.all(data.results.map(async (pokemon) => {
-    const id = pokemon.url.split("/").slice(-2, -1)[0];
+
+  //split will store the values of the url seperated by /
+  // get the id of the pokemon by starting at the 2nd last place, since the last element is an empty entry
+  const id = pokemon.url.split("/").slice(-2, -1)[0];
+
+    //fetch the detailed data of individual pokemon from it's url
     const pokemonDetailsResponse = await fetch(pokemon.url);
+
+    //if any error occurs throw an error
     if (!pokemonDetailsResponse.ok) throw new Error(`Failed to fetch details for ${pokemon.name}`);
+
+    //parsing the json response and storing the detailed pokemon details
+    //defining the structure of pokemonDetails
     const pokemonDetails: {
       sprites: { other: { "official-artwork": { front_default: string } } };
       types: { type: { name: string } }[];
       stats: Stat[];
     } = await pokemonDetailsResponse.json();
  
+    //return a new object containing additional details
     return {
-      ...pokemon,
+      ...pokemon,// spreads the details of pokemon object, containing name and url.
       id: parseInt(id, 10),
       sprite: pokemonDetails.sprites.other["official-artwork"].front_default,
       types: pokemonDetails.types.map((typeObj) => typeObj.type.name),
       totalStats: pokemonDetails.stats.reduce((sum: number, stat: { base_stat: number }) => sum + stat.base_stat, 0),
     };
   }));
- 
+  
+  //resolving the promise with the final object returning the object 
+  //this contains
+  //resultsWithIdsSpritesAndTypes :- resolved array of pokemon objects
   return {
-    results: resultsWithIdsSpritesAndTypes,
-    total: data.count,
+    results: resultsWithIdsSpritesAndTypes,//resolved array of pokemon object?
+    total: data.count,//total count of pokemon object through the api
   };
 }
- 
+
+//retur
 export async function fetchFilteredPokemon(type: string | null, searchQuery: string | null): Promise<Pokemon[]> {
+
+  //with the help of base url, we'll append type paramete and searchQuery parameter
   const baseUrl = "https://pokeapi.co/api/v2";
+
+  //this will hold the results after filtering based on the type 
   let filteredResults: { name: string; url: string }[] = [];
  
   if (type) {
+    //adding type route to the base url
+    //from here, selected type is choosen as the endpoint
     const typeResponse = await fetch(`${baseUrl}/type/${type}`);
+
+    //throw an erroe if the response is not of type 200's   
     if (!typeResponse.ok) throw new Error("Failed to fetch Pokémon by type");
+
+    //parsing the json response and storing the pokeon object with poperties name and url
     const typeData: { pokemon: { pokemon: { name: string; url: string } }[] } = await typeResponse.json();
+
+    //mapping the pokemon objects containing name and the url into filteredResults array
     filteredResults = typeData.pokemon.map((p) => ({
       name: p.pokemon.name,
       url: p.pokemon.url,
@@ -48,8 +83,14 @@ export async function fetchFilteredPokemon(type: string | null, searchQuery: str
  
   if (searchQuery) {
     try {
+      //on baseUrl append pokeon and from there go to the custom endpoint defined in the searchQuery state
       const searchResponse = await fetch(`${baseUrl}/pokemon/${searchQuery.toLowerCase()}`);
+
+      //if the response is of 200's
       if (searchResponse.ok) {
+
+        //store the details of the searchResponse  
+        
         const details: {
           id: number;
           name: string;
