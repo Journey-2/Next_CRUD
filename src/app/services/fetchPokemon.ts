@@ -89,20 +89,21 @@ export async function fetchFilteredPokemon(type: string | null, searchQuery: str
       //if the response is of 200's
       if (searchResponse.ok) {
 
-        //store the details of the searchResponse  
+        //store the details of the searchResponse in object details
         
         const details: {
           id: number;
           name: string;
-          types: { type: { name: string } }[];
-          stats: Stat[];
+          types: { type: { name: string } }[];//array of types
+          stats: Stat[];//array of stats 
           sprites: { other: { "official-artwork": { front_default: string } } };
-        } = await searchResponse.json();
+        } = await searchResponse.json();//resolves to a JSON object containing the details
+        //this will trigger when searchQuery state is changed, returning an array for a single pokemon object containin details 
         return [
           {
             id: details.id,
             name: details.name,
-            types: details.types.map((t) => t.type.name),
+            types: details.types.map((t) => t.type.name),//get the names of type if there are multi types 
             totalStats: details.stats.reduce((sum, stat) => sum + stat.base_stat, 0),
             sprite: details.sprites.other["official-artwork"].front_default,
           },
@@ -111,20 +112,25 @@ export async function fetchFilteredPokemon(type: string | null, searchQuery: str
     } catch (error) {
       console.error("Failed to fetch Pokémon by name:", error);
     }
-    return [];
+    return [];//return empty if the searchQuery doesn't match anything in the pokemon object
   }
  
+  //trigger when search or type is not selected 
   if (!type && !searchQuery) {
     const response = await fetch(`${baseUrl}/pokemon?limit=50`);
     if (!response.ok) throw new Error("Failed to fetch Pokémon list");
     const data = await response.json();
     filteredResults = data.results;
   }
- 
+
+  //fetch the details for each Pokémon in the filteredResults list
   return Promise.all(
     filteredResults.slice(0, 50).map(async (pokemon) => {
+      //get the detailed information for the first 50 filtered pokemon 
       const detailsResponse = await fetch(pokemon.url);
       if (!detailsResponse.ok) throw new Error("Failed to fetch Pokémon details");
+
+      //defining the typing for each of the fetched pokemon details
       const details: {
         id: number;
         name: string;
@@ -132,6 +138,8 @@ export async function fetchFilteredPokemon(type: string | null, searchQuery: str
         stats: Stat[];
         sprites: { other: { "official-artwork": { front_default: string } } };
       } = await detailsResponse.json();
+
+      //get these details for each pokemon
       return {
         id: details.id,
         name: pokemon.name,
@@ -173,7 +181,8 @@ export async function fetchPokemonDetails(pokemonId: number): Promise<PokemonDet
     .filter((entry) => entry.language.name === "en")
     .slice(0, 3)
     .map((entry) => entry.flavor_text);
- 
+  
+  //get some addtional data for drawer page
   return {
     id: details.id,
     name: details.name,

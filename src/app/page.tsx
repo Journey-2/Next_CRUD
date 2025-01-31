@@ -28,13 +28,13 @@ export default function Home() {
  
   const offset = (currentPage - 1) * pageSize;
  
-        // Fetch Paginated Data
+        //fetch Paginated Data
         const { data: paginatedData, isLoading: isPaginatedLoading } = useQuery({
           queryKey: ["paginatedPokemon", currentPage, pageSize],
           queryFn: () => fetchPaginatedPokemon(pageSize, offset),
       });
    
-      // Fetch Filtered Data
+      //fetch Filtered Data
       const { data: filteredData, isLoading: isFilteredLoading } = useQuery({
           queryKey: ["filteredPokemon", selectedType, searchQueryForFetch],
           queryFn: () => fetchFilteredPokemon(selectedType, searchQueryForFetch),
